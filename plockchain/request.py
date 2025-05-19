@@ -127,6 +127,7 @@ class Request:
         timeout: float = 5.0,
         import_config: dict | None = None,
         export_config: dict | None = None,
+        event: dict | None = None,
     ):
         self.importer_config = import_config
         self.exporter_config = export_config
@@ -152,6 +153,14 @@ class Request:
 
         if self.method.lower() != b"get":
             self.body = Body(self.raw_body, self.header.get("Content-Type"))
+
+        self.event = event
+        if event is not None and isinstance(event, dict):
+            try:
+                self.event.get("conditions")
+                self.event.get("triggers")
+            except AttributeError:
+                raise ValueError("Event must have conditions and triggers")
 
     def add_header(self, key: str, value: str):
         self.header.add(key, value)
@@ -184,9 +193,12 @@ class Request:
             self.timeout,
             self.importer_config,
             self.exporter_config,
+            self.event,
         )
 
-    def run(self, global_vars: dict, proxy_config: dict | None):
+    def run(
+        self, global_vars: dict, proxy_config: dict | None, support_chains: dict | None
+    ):
         """Run request"""
         request_to_run = self.copy()
         request_to_run.importer(global_vars)
@@ -201,7 +213,44 @@ class Request:
             proxy_config,
         )
         request_to_run.response = Response(http_res)
-        # End req handler
+
+        if request_to_run.event is None:
+            request_to_run.exporter(global_vars)
+            return
+
+        conditions = request_to_run.event.get("conditions")
+        triggers = request_to_run.event.get("triggers")
+
+        for cond, exp in conditions.items():
+            if cond not in ["status", "header", "body"]:
+                raise ValueError("Condition must be in [status, header, body]")
+
+            if (
+                cond == "status"
+                and str(exp).encode() != request_to_run.response.status_code
+            ):
+                return
+
+            chain = triggers.get("chain", None)
+            if chain is None:
+                raise ValueError("Chain must be in triggers")
+
+            chain_to_be_run = support_chains[chain]
+            # print(chain_to_be_run)
+            chain_to_be_run.run()
+
+        # Resend the request
+        request_to_run.importer(global_vars)
+        http_res = send_http_request(
+            self.host,
+            self.port,
+            request_to_run.raw,
+            self.timeout,
+            self.use_tls,
+            proxy_config,
+        )
+        request_to_run.response = Response(http_res)
+
         request_to_run.exporter(global_vars)
 
     def exporter(self, global_vars: dict):
@@ -233,6 +282,7 @@ class Request:
 
     def importer(self, global_vars: dict):
         import pystache
+
         if self.importer_config is None:
             return
 
@@ -262,10 +312,15 @@ class Request:
         port = req_conf.get("port")
 
         if host is None or port is None:
-            raise ValueError("Host or port is None")
+            host = "auto"
+            port = "auto"
+
+        event = req_conf.get("event", None)
+        if event is not None and not isinstance(event, dict):
+            raise ValueError("Event must be a dict")
 
         req = Request(
-            (host, port), data, use_tls, timeout, import_config, export_config
+            (host, port), data, use_tls, timeout, import_config, export_config, event
         )
         return req
 
@@ -279,6 +334,11 @@ class Response:
         self.raw_headers, self.raw_body = response.split(sep=b"\r\n\r\n", maxsplit=1)
         self.header = Header(self.raw_headers)
         self.body = Body(self.raw_body)
+
+        first_line = self.raw_headers.split(sep=b"\r\n")[0]
+        self.version, self.status_code, self.reason = first_line.split(
+            sep=b" ", maxsplit=2
+        )
 
 
 import socket

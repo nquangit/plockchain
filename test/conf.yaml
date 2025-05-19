@@ -8,12 +8,31 @@ proxy:
 
 chain:
   - req:
-      name: raw1
-      # Default is true
+      name: profile
       use_tls: true
+      # Auto mode will get the host from the Host header
+      host: auto
+      # Auto mode will get the port base-on use_tls value (80 or 443)
+      port: auto
+      # Timeout in seconds (default: 5.0)
+      timeout: 5.0
+
+      event:
+        conditions:
+          status: 401
+        triggers:
+          chain: auth_chain
+
+      import:
+        headers:
+          Authorization: "Bearer {{token}}"
+
+# Support chain must end with _chain suffix
+auth_chain:
+  - req:
+      name: login
       host: api.taskspace.com.vn
       port: 443
-      # Default is 5.0
       timeout: 5.0
       export:
         response:
@@ -22,15 +41,3 @@ chain:
               name: token
               # Key access with jq for json response with unique key
               key: ".data"
-  - req:
-      name: raw2
-      use_tls: true
-      # Auto mode will get the host from the Host header
-      host: auto
-      # Auto mode will get the port base-on use_tls value (80 or 443)
-      port: auto
-
-      import:
-        headers:
-          # Write as pystache template
-          Authorization: "Bearer {{token}}"

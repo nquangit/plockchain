@@ -22,6 +22,7 @@ class RequestChain:
         self.node_dict = {}
         self.global_vars = {}
         self.proxy_config = None
+        self.support_chains = {}
 
     def add(self, obj, name):
         """Add object to linked list"""
@@ -40,7 +41,7 @@ class RequestChain:
         """Run all requests"""
         curr = self.head
         while curr is not None:
-            curr.obj.run(self.global_vars, self.proxy_config)
+            curr.obj.run(self.global_vars, self.proxy_config, self.support_chains)
             curr = curr.next
 
     @staticmethod
@@ -57,6 +58,9 @@ class RequestChain:
             data = yaml.safe_load(f)
 
         chain = data.get("chain")
+        if not isinstance(chain, list):
+            raise ValueError("Chain not found in config file")
+
         proxy_config = data.get("proxy", None)
         global_vars = data.get("global_vars", {})
 
@@ -71,9 +75,6 @@ class RequestChain:
                 proxy_config.get("port")
             except AttributeError:
                 raise ValueError("Proxy config must have host and port")
-
-        if not isinstance(chain, list):
-            raise ValueError("Chain not found in config file")
 
         base_dir = path.parent
 
@@ -90,5 +91,23 @@ class RequestChain:
             req_obj = Request.parse_request(base_dir, req_conf)
 
             req_chain.add(req_obj, req_conf.get("name"))
+
+        # Support chain like login
+        support_chains = [i for i in data.keys() if i.endswith("_chain")]
+        for support_chain in support_chains:
+            support_chain_reqs = RequestChain()
+            support_chain_reqs.proxy_config = proxy_config
+            support_chain_reqs.global_vars = req_chain.global_vars
+
+            req_chain.support_chains[support_chain] = None
+            chain = data[support_chain]
+            for req in chain:
+                req_conf = req.get("req")
+                if not isinstance(req_conf, dict):
+                    raise ValueError("Request not found in config file")
+                req_obj = Request.parse_request(base_dir, req_conf)
+                support_chain_reqs.add(req_obj, req_conf.get("name"))
+
+            req_chain.support_chains[support_chain] = support_chain_reqs
 
         return req_chain
