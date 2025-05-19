@@ -1,0 +1,37 @@
+---
+global_vars:
+  key: value
+
+proxy:
+  host: 127.0.0.1
+  port: 8080
+
+chain:
+  - req:
+      name: raw1
+      # Default is true
+      use_tls: true
+      host: api.taskspace.com.vn
+      port: 443
+      # Default is 5.0
+      timeout: 5.0
+      export:
+        response:
+          body:
+            var:
+              name: token
+              # Key access with jq for json response with unique key
+              key: ".data"
+  - req:
+      name: raw2
+      use_tls: true
+      host: auto
+      port: auto
+      import:
+        vars:
+          - var:
+              name: token
+              dest:
+                pos: header
+                key: Authorization
+                prefix: "Bearer "

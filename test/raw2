@@ -1,0 +1,15 @@
+GET /api/Identity/me HTTP/2
+Host: api.taskspace.com.vn
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:138.0) Gecko/20100101 Firefox/138.0
+Accept: application/json, text/plain, */*
+Accept-Language: en-US,en;q=0.5
+Accept-Encoding: gzip, deflate, br
+Origin: https://taskspace.com.vn
+Dnt: 1
+Sec-Gpc: 1
+Referer: https://taskspace.com.vn/
+Sec-Fetch-Dest: empty
+Sec-Fetch-Mode: cors
+Sec-Fetch-Site: same-site
+Te: trailers
+
