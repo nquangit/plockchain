@@ -232,33 +232,15 @@ class Request:
                     global_vars[var_obj.get("name")] = tmp
 
     def importer(self, global_vars: dict):
+        import pystache
         if self.importer_config is None:
             return
 
         sources = set(self.importer_config.keys())
-        if "vars" in sources:
-            vars_config = self.importer_config.get("vars")
-            for var_obj in vars_config:
-                var = var_obj.get("var")
-                if var is None:
-                    continue
-
-                var_name = var.get("name", "")
-                var_value = global_vars.get(var_name, None)
-                if var_value is None:
-                    raise ValueError(f"Variable {var_name} not found")
-
-                dest = var.get("dest", None)
-                if dest is None:
-                    continue
-
-                if dest.get("pos", None) == "header":
-                    key = dest.get("key", None)
-                    if key is None:
-                        continue
-
-                    prefix = dest.get("prefix", "")
-                    self.header.add(key, prefix + var_value)
+        if "headers" in sources:
+            for key, value in self.importer_config["headers"].items():
+                parse_value = pystache.render(value, global_vars)
+                self.header.add(key, parse_value)
 
     @staticmethod
     def parse_request(base_dir: Path, req_conf: dict) -> object:

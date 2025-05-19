@@ -27,11 +27,8 @@ chain:
       use_tls: true
       host: auto
       port: auto
+
       import:
-        vars:
-          - var:
-              name: token
-              dest:
-                pos: header
-                key: Authorization
-                prefix: "Bearer "
+        headers:
+          # Write as pystache template
+          Authorization: "Bearer {{token}}"
