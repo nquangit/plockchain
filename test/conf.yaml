@@ -25,7 +25,9 @@ chain:
   - req:
       name: raw2
       use_tls: true
+      # Auto mode will get the host from the Host header
       host: auto
+      # Auto mode will get the port base-on use_tls value (80 or 443)
       port: auto
 
       import:
