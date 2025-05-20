@@ -241,9 +241,7 @@ class Request:
         )
         request_to_run.response = Response(http_res)
 
-        if request_to_run.events is None:
-            request_to_run.exporter(global_vars)
-            return
+        resend = False
         for event in request_to_run.events:
             conditions = event.get("conditions")
             triggers = event.get("triggers")
@@ -269,9 +267,16 @@ class Request:
                                 chain_to_be_run.run(
                                     custom_support_chains=support_chains
                                 )
+                            resend = True
+                            # Skip the other checking
+                            continue
+
+                        # Checking if trigger skip event
                         skip_the_chain = triggers.get("skip", False)
                         if skip_the_chain:
-                            logger.error(f"Skip the chain by event status code in {exp}")
+                            logger.error(
+                                f"Skip the chain in request {request_to_run.path} by event status code in {exp}"
+                            )
                             global_vars["skip_the_chain"] = True
                             return
                     continue
@@ -288,9 +293,14 @@ class Request:
                                 raise ValueError(f"Chain {chain} not found")
                             # print(chain_to_be_run)
                             chain_to_be_run.run(custom_support_chains=support_chains)
+                        resend = True
                     continue
 
                 raise NotImplementedError(f"{cond} Not implemented yet")
+
+        if not resend:
+            request_to_run.exporter(global_vars)
+            return
 
         # Resend the request
         request_to_run.importer(global_vars)
