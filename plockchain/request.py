@@ -2,6 +2,9 @@ import json
 import xml.etree.ElementTree as ET
 from pathlib import Path
 import jq
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Header:
@@ -227,17 +230,21 @@ class Request:
 
             if (
                 cond == "status"
-                and str(exp).encode() != request_to_run.response.status_code
+                and str(exp).encode() == request_to_run.response.status_code
             ):
-                return
+                chains = triggers.get("chains", None)
+                if chains is None or not isinstance(chains, list):
+                    raise ValueError("Chain must be a list in triggers")
 
-            chain = triggers.get("chain", None)
-            if chain is None:
-                raise ValueError("Chain must be in triggers")
+                for chain in chains:
+                    chain_to_be_run = support_chains.get(chain, None)
+                    if chain_to_be_run is None:
+                        raise ValueError("Chain not found")
+                    # print(chain_to_be_run)
+                    chain_to_be_run.run()
+                continue
 
-            chain_to_be_run = support_chains[chain]
-            # print(chain_to_be_run)
-            chain_to_be_run.run()
+            raise NotImplementedError("Not implemented yet")
 
         # Resend the request
         request_to_run.importer(global_vars)
@@ -289,8 +296,12 @@ class Request:
         sources = set(self.importer_config.keys())
         if "headers" in sources:
             for key, value in self.importer_config["headers"].items():
-                parse_value = pystache.render(value, global_vars)
-                self.header.add(key, parse_value)
+                renderer = pystache.Renderer(missing_tags="strict")
+                try:
+                    parse_value = renderer.render(value, global_vars)
+                    self.header.add(key, parse_value)
+                except pystache.context.KeyNotFoundError as e:
+                    logger.error(f"Key not found: {e} - skipping adding")
 
     @staticmethod
     def parse_request(base_dir: Path, req_conf: dict) -> object:

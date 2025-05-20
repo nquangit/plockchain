@@ -20,8 +20,10 @@ chain:
       event:
         conditions:
           status: 401
+          # body: "something"
         triggers:
-          chain: auth_chain
+          chains:
+            - auth_chain
 
       import:
         headers:

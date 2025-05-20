@@ -1,5 +1,6 @@
 import yaml
 from .request import Request
+import uuid
 
 
 class Node:
@@ -20,7 +21,7 @@ class RequestChain:
 
         self.node_list = []
         self.node_dict = {}
-        self.global_vars = {}
+        self.global_vars = {"uuidv4": lambda: str(uuid.uuid4())}
         self.proxy_config = None
         self.support_chains = {}
 
