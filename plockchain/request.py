@@ -156,7 +156,7 @@ class Request:
         timeout: float = 5.0,
         import_config: dict | None = None,
         export_config: dict | None = None,
-        event: dict | None = None,
+        events: list | None = None,
     ):
         self.importer_config = import_config
         self.exporter_config = export_config
@@ -184,13 +184,7 @@ class Request:
         if self.method.lower() != b"get":
             self.body = Body(self.raw_body, self.header.get("Content-Type"))
 
-        self.event = event
-        if event is not None and isinstance(event, dict):
-            try:
-                self.event.get("conditions")
-                self.event.get("triggers")
-            except AttributeError:
-                raise ValueError("Event must have conditions and triggers")
+        self.events = events
 
     def add_header(self, key: str, value: str):
         self.header.add(key, value)
@@ -228,7 +222,7 @@ class Request:
             self.timeout,
             self.importer_config,
             self.exporter_config,
-            self.event,
+            self.events,
         )
 
     def run(self, global_vars, proxy_config: dict | None, support_chains: dict | None):
@@ -247,32 +241,56 @@ class Request:
         )
         request_to_run.response = Response(http_res)
 
-        if request_to_run.event is None:
+        if request_to_run.events is None:
             request_to_run.exporter(global_vars)
             return
+        for event in request_to_run.events:
+            conditions = event.get("conditions")
+            triggers = event.get("triggers")
 
-        conditions = request_to_run.event.get("conditions")
-        triggers = request_to_run.event.get("triggers")
+            for cond, exp in conditions.items():
+                if cond not in ["status", "header", "body"]:
+                    raise ValueError("Condition must be in [status, header, body]")
 
-        for cond, exp in conditions.items():
-            if cond not in ["status", "header", "body"]:
-                raise ValueError("Condition must be in [status, header, body]")
+                if cond == "status":
+                    if request_to_run.response.status_code in [
+                        i.strip() for i in str(exp).encode().split(b",")
+                    ]:
+                        chains = triggers.get("chains", None)
+                        if chains is not None:
+                            if not isinstance(chains, list):
+                                raise ValueError("Chain must be a list in triggers")
 
-            if cond == "status":
-                if str(exp).encode() == request_to_run.response.status_code:
-                    chains = triggers.get("chains", None)
-                    if chains is None or not isinstance(chains, list):
-                        raise ValueError("Chain must be a list in triggers")
+                            for chain in chains:
+                                chain_to_be_run = support_chains.get(chain, None)
+                                if chain_to_be_run is None:
+                                    raise ValueError(f"Chain {chain} not found")
+                                # print(chain_to_be_run)
+                                chain_to_be_run.run(
+                                    custom_support_chains=support_chains
+                                )
+                        skip_the_chain = triggers.get("skip", False)
+                        if skip_the_chain:
+                            logger.error(f"Skip the chain by event status code in {exp}")
+                            global_vars["skip_the_chain"] = True
+                            return
+                    continue
 
-                    for chain in chains:
-                        chain_to_be_run = support_chains.get(chain, None)
-                        if chain_to_be_run is None:
-                            raise ValueError("Chain not found")
-                        # print(chain_to_be_run)
-                        chain_to_be_run.run()
-                continue
+                if cond == "body":
+                    if str(exp).encode() in request_to_run.response.body.raw:
+                        chains = triggers.get("chains", None)
+                        if chains is None or not isinstance(chains, list):
+                            raise ValueError("Chain must be a list in triggers")
 
-            raise NotImplementedError(f"{cond} Not implemented yet")
+                        for chain in chains:
+                            chain_to_be_run = support_chains.get(chain, None)
+                            if chain_to_be_run is None:
+                                raise ValueError(f"Chain {chain} not found")
+                            # print(chain_to_be_run)
+                            chain_to_be_run.run(custom_support_chains=support_chains)
+                    continue
+
+                raise NotImplementedError(f"{cond} Not implemented yet")
 
         # Resend the request
         request_to_run.importer(global_vars)
@@ -372,12 +390,22 @@ class Request:
             host = "auto"
             port = "auto"
 
-        event = req_conf.get("event", None)
-        if event is not None and not isinstance(event, dict):
-            raise ValueError("Event must be a dict")
+        events = req_conf.get("events", [])
+
+        if events is not None and not isinstance(events, list):
+            raise ValueError("Event must be a list")
+
+        for event in events:
+            if not isinstance(event, dict):
+                raise ValueError("Event must be a dict")
+            if (
+                event.get("conditions", None) is None
+                or event.get("triggers", None) is None
+            ):
+                raise ValueError("Event must have conditions and triggers")
 
         req = Request(
-            (host, port), data, use_tls, timeout, import_config, export_config, event
+            (host, port), data, use_tls, timeout, import_config, export_config, events
         )
         return req
 

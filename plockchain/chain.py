@@ -54,10 +54,17 @@ class RequestChain:
             self.node_list.append(self.tail)
             self.node_dict[name] = self.tail
 
-    def run(self, custom_vars: dict | None = None):
+    def run(
+        self, custom_vars: dict | None = None, custom_support_chains: dict | None = None
+    ):
         """Run all requests"""
         if custom_vars is not None and isinstance(custom_vars, dict):
             self.global_vars.update(custom_vars)
+
+        if custom_support_chains is not None and isinstance(
+            custom_support_chains, dict
+        ):
+            self.support_chains.update(custom_support_chains)
 
         curr = self.head
         while curr is not None:
@@ -66,6 +73,11 @@ class RequestChain:
             )
             self.request_responses.append(request_response)
             curr = curr.next
+
+            if self.global_vars.get("skip_the_chain", False):
+                break
+
+        self.global_vars.save()
 
         return self.request_responses
 

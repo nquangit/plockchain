@@ -10,7 +10,7 @@ import yaml
 
 chain: RequestChain = RequestChain.parse_config("test/conf.yaml")
 
-chain.run()
+chain.run(custom_vars={})
 
 # print(chain.head)
 
