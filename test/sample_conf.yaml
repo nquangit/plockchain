@@ -16,17 +16,23 @@ chain:
       use_tls: true
       timeout: 5.0
 
-      event:
-        conditions:
-          status: 401
-          # body: "something"
-        triggers:
-          chains:
-            - auth_chain
+      events:
+        # Only response event
+        - conditions:
+            status: 401
+            # body: "something"
+          triggers:
+            chains:
+              - auth_chain
+        - conditions:
+            status: 500
+          triggers:
+            skip: true
 
       import:
         headers:
           authorization: "Bearer {{jwt_token}}"
+          "CSTC": "skip CSTC"
         body:
           ".transaction.refRequestId": "{{uuid4}}"
 
@@ -42,9 +48,18 @@ chain:
       name: user_verify
       use_tls: true
       timeout: 5.0
+
+      events:
+        - conditions:
+            status: 401,500
+            # body: "something"
+          triggers:
+            skip: true
+
       import:
         headers:
           authorization: "Bearer {{jwt_token}}"
+          "CSTC": "skip CSTC"
         body:
           ".payload.payload.refCode": "{{init_refCode}}"
           ".requestId": "{{init_requestId}}"
@@ -58,13 +73,23 @@ chain:
                 key: ".data.data.secureCode"
               - name: stepUpSignature
                 key: ".data.stepUpSignature.signature"
+
   - req:
       name: inquiry-status
       use_tls: true
       timeout: 5.0
+
+      events:
+        - conditions:
+            status: 401,500
+            # body: "something"
+          triggers:
+            skip: true
+
       import:
         headers:
           authorization: "Bearer {{jwt_token}}"
+          "CSTC": "skip CSTC"
         body:
           ".requestId": "{{init_requestId}}"
 
@@ -72,9 +97,18 @@ chain:
       name: confirm-transaction
       user_tls: true
       timeout: 5.0
+
+      events:
+        - conditions:
+            status: 401,500
+            # body: "something"
+          triggers:
+            skip: true
+
       import:
         headers:
           authorization: "Bearer {{jwt_token}}"
+          "CSTC": "skip CSTC"
         body:
           ".requestId": "{{init_requestId}}"
           ".payload.refCode": "{{init_refCode}}"
@@ -85,6 +119,9 @@ chain:
 auth_chain:
   - req:
       name: login
+      import:
+        headers:
+          "CSTC": "skip CSTC"
       export:
         response:
           body:
@@ -92,3 +129,81 @@ auth_chain:
               - name: jwt_token
                 # Key access with jq for json response with unique key
                 key: ".data.jwt_token"
+
+      events:
+        - conditions:
+            body: "change_device_token"
+          triggers:
+            chains:
+              - change_device_chain
+      # response_process:
+
+change_device_chain:
+  - req:
+      name: login
+      use_tls: true
+      import:
+        headers:
+          "CSTC": "skip CSTC"
+      export:
+        response:
+          body:
+            vars:
+              - name: change_device_token
+                key: ".data.change_device_token"
+  - req:
+      name: change_device_init
+      use_tls: true
+      import:
+        headers:
+          "CSTC": "skip CSTC"
+          authorization: "Bearer {{change_device_token}}"
+      export:
+        response:
+          body:
+            vars:
+              - name: change_device_requestId
+                key: ".data.requestId"
+
+  - req:
+      name: change_device_get_otp
+      use_tls: true
+      import:
+        headers:
+          "CSTC": "skip CSTC"
+          authorization: "Bearer {{change_device_token}}"
+        body:
+          ".requestId": "{{change_device_requestId}}"
+      export:
+        response:
+          body:
+            vars:
+              - name: change_device_otp
+                key: ".data.payload.code"
+
+  - req:
+      name: change_device_verify_otp
+      use_tls: true
+      import:
+        headers:
+          "CSTC": "skip CSTC"
+          authorization: "Bearer {{change_device_token}}"
+        body:
+          ".requestId": "{{change_device_requestId}}"
+          ".payload.code": "{{change_device_otp}}"
+      export:
+        response:
+          body:
+            vars:
+              - name: stepUpSignature
+                key: ".data.stepUpSignature.signature"
+
+  - req:
+      name: change_device_submit
+      use_tls: true
+      import:
+        headers:
+          "CSTC": "skip CSTC"
+          authorization: "Bearer {{change_device_token}}"
+        body:
+          ".stepUpSignatures[].signature": "{{stepUpSignature}}"
