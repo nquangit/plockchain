@@ -58,6 +58,28 @@ chain:
                 key: ".data.data.secureCode"
               - name: stepUpSignature
                 key: ".data.stepUpSignature.signature"
+  - req:
+      name: inquiry-status
+      use_tls: true
+      timeout: 5.0
+      import:
+        headers:
+          authorization: "Bearer {{jwt_token}}"
+        body:
+          ".requestId": "{{init_requestId}}"
+
+  - req:
+      name: confirm-transaction
+      user_tls: true
+      timeout: 5.0
+      import:
+        headers:
+          authorization: "Bearer {{jwt_token}}"
+        body:
+          ".requestId": "{{init_requestId}}"
+          ".payload.refCode": "{{init_refCode}}"
+          ".payload.data.refRequestId": "{{init_requestId}}"
+          ".payload.stepupSignatures[].signature": "{{stepUpSignature}}"
 
 # Support chain should end with _chain suffix
 auth_chain:

@@ -2,7 +2,7 @@ import setuptools
 
 setuptools.setup(
 	name="plockchain",
-	version="1.1",
+	version="1.2",
 	author="nquangit",
 	license="MIT",
 	author_email="nquang.it.04@gmail.com",
