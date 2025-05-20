@@ -25,7 +25,13 @@ class Header:
         self.headers_list = [f"{k}: {v}" for k, v in self.headers_dict.items()]
 
     def add(self, key: str, value: str):
-        self.headers_dict[key] = value
+        if key in self.headers_dict:
+            self.headers_dict[key] = value
+        else:
+            try:
+                self.headers_dict[key.lower()] = value
+            except KeyError:
+                return None
         self.__update_headers_list()
 
     def remove(self, key: str):
@@ -70,6 +76,11 @@ class Body:
 
         if self.content_type is None:
             self.content_type = self.__detect_content_type()
+        else:
+            self.content_type = self.content_type.split(sep=";")[0]
+            if self.content_type == self.OCTET_STREAM:
+                # Redetect
+                self.content_type = self.__detect_content_type()
 
     def get(self, key):
         if self.content_type == self.X_WWW_FORM_URLENCODED:
@@ -80,6 +91,21 @@ class Body:
             except json.JSONDecodeError:
                 return None
             return jq.compile(key).input(json_body).all()
+        elif self.content_type == self.XML:
+            return
+        else:
+            return None
+
+    def add(self, key, value):
+        if self.content_type == self.X_WWW_FORM_URLENCODED:
+            return
+        elif self.content_type == self.JSON:
+            try:
+                json_body = json.loads(self.body)
+            except json.JSONDecodeError:
+                return None
+            updated_body = jq.compile(f'{key}|="{value}"').input(json_body).first()
+            self.body = json.dumps(updated_body, separators=(",", ":"))
         elif self.content_type == self.XML:
             return
         else:
@@ -144,12 +170,13 @@ class Request:
 
         # Load host on auto mode
         if self.host is None or self.host == "" or self.host == "auto":
-            self.host = self.header.get("Host")
+            self.host = self.header.get("Host").split(sep=":")[0]
+        # Load port on auto mode
         if self.port is None or self.port == "auto":
-            if self.use_tls:
-                self.port = 443
+            if len(self.header.get("Host").split(sep=":")) == 2:
+                self.port = self.header.get("Host").split(sep=":")[1]
             else:
-                self.port = 80
+                self.port = 443 if self.use_tls else 80
 
         first_line = self.raw_headers.split(sep=b"\r\n")[0]
         self.method, self.path, self.version = first_line.split(sep=b" ", maxsplit=2)
@@ -174,8 +201,13 @@ class Request:
     def get_header(self, key: str):
         return self.header.get(key)
 
+    def __update_content_length(self):
+        self.header.add("Content-Length", str(len(self.body.raw)))
+
     @property
     def raw(self):
+        # TODO: add checking config for auto update content length
+        self.__update_content_length()
         return (
             self.method
             + b" "
@@ -185,7 +217,7 @@ class Request:
             + b"\r\n"
             + self.header.raw
             + b"\r\n\r\n"
-            + self.raw_body
+            + self.body.raw
         )
 
     def copy(self):
@@ -199,9 +231,7 @@ class Request:
             self.event,
         )
 
-    def run(
-        self, global_vars: dict, proxy_config: dict | None, support_chains: dict | None
-    ):
+    def run(self, global_vars, proxy_config: dict | None, support_chains: dict | None):
         """Run request"""
         request_to_run = self.copy()
         request_to_run.importer(global_vars)
@@ -228,23 +258,21 @@ class Request:
             if cond not in ["status", "header", "body"]:
                 raise ValueError("Condition must be in [status, header, body]")
 
-            if (
-                cond == "status"
-                and str(exp).encode() == request_to_run.response.status_code
-            ):
-                chains = triggers.get("chains", None)
-                if chains is None or not isinstance(chains, list):
-                    raise ValueError("Chain must be a list in triggers")
+            if cond == "status":
+                if str(exp).encode() == request_to_run.response.status_code:
+                    chains = triggers.get("chains", None)
+                    if chains is None or not isinstance(chains, list):
+                        raise ValueError("Chain must be a list in triggers")
 
-                for chain in chains:
-                    chain_to_be_run = support_chains.get(chain, None)
-                    if chain_to_be_run is None:
-                        raise ValueError("Chain not found")
-                    # print(chain_to_be_run)
-                    chain_to_be_run.run()
+                    for chain in chains:
+                        chain_to_be_run = support_chains.get(chain, None)
+                        if chain_to_be_run is None:
+                            raise ValueError("Chain not found")
+                        # print(chain_to_be_run)
+                        chain_to_be_run.run()
                 continue
 
-            raise NotImplementedError("Not implemented yet")
+            raise NotImplementedError(f"{cond} Not implemented yet")
 
         # Resend the request
         request_to_run.importer(global_vars)
@@ -259,8 +287,9 @@ class Request:
         request_to_run.response = Response(http_res)
 
         request_to_run.exporter(global_vars)
+        return request_to_run
 
-    def exporter(self, global_vars: dict):
+    def exporter(self, global_vars):
         if self.exporter_config is None:
             return
 
@@ -268,26 +297,34 @@ class Request:
             if key not in ["request", "response"]:
                 continue
 
+            if key == "response" and getattr(self, "response", None) is None:
+                raise ValueError("The request has not been run yet")
+
             for pos, val in value.items():
                 if pos not in ["body", "header"]:
                     continue
 
-                var_obj = val.get("var")
-                if var_obj is None:
+                var_objs = val.get("vars")
+                if var_objs is None:
                     continue
 
-                if pos == "body":
-                    if getattr(self, "response", None) is None:
-                        raise ValueError("The request has not been run yet")
-                    tmp = self.response.body.get(var_obj.get("key"))
-                    if len(tmp) == 0:
-                        continue
-                    if len(tmp) != 1:
-                        raise ValueError("The key must be unique")
-                    tmp = tmp[0]
-                    global_vars[var_obj.get("name")] = tmp
+                for var_obj in var_objs:
+                    if pos == "body":
+                        tmp = self.response.body.get(var_obj.get("key"))
+                        if tmp is None:
+                            logger.warning(f"Key {var_obj.get('key')} not found")
+                            continue
+                        if len(tmp) == 0:
+                            logger.warning(f"Key {var_obj.get('key')} not found")
+                            continue
+                        if len(tmp) != 1:
+                            raise ValueError("The key must be unique")
+                        tmp = tmp[0]
+                        global_vars[var_obj.get("name")] = tmp
 
-    def importer(self, global_vars: dict):
+        global_vars.save()
+
+    def importer(self, global_vars):
         import pystache
 
         if self.importer_config is None:
@@ -300,6 +337,15 @@ class Request:
                 try:
                     parse_value = renderer.render(value, global_vars)
                     self.header.add(key, parse_value)
+                except pystache.context.KeyNotFoundError as e:
+                    logger.error(f"Key not found: {e} - skipping adding")
+
+        if "body" in sources:
+            for key, value in self.importer_config.get("body").items():
+                renderer = pystache.Renderer(missing_tags="strict")
+                try:
+                    parse_value = renderer.render(value, global_vars)
+                    self.body.add(key, parse_value)
                 except pystache.context.KeyNotFoundError as e:
                     logger.error(f"Key not found: {e} - skipping adding")
 

@@ -29,7 +29,7 @@ chain:
         headers:
           Authorization: "Bearer {{token}}"
 
-# Support chain must end with _chain suffix
+# Support chain should end with _chain suffix
 auth_chain:
   - req:
       name: login

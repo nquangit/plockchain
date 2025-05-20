@@ -12,6 +12,21 @@ class Node:
         self.next = next
 
 
+class GlobalVariable(dict):
+    """Class for store global variables"""
+
+    def save(self):
+        """Save global variables to file"""
+        # Exclude object in global variable
+        string_variable = {}
+        for key, value in self.items():
+            if isinstance(value, str):
+                string_variable[key] = value
+
+        with open("global_vars.yaml", "w") as f:
+            yaml.dump(string_variable, f)
+
+
 class RequestChain:
     """Class for RequestChain store linked list"""
 
@@ -21,9 +36,10 @@ class RequestChain:
 
         self.node_list = []
         self.node_dict = {}
-        self.global_vars = {"uuidv4": lambda: str(uuid.uuid4())}
+        self.global_vars = GlobalVariable({"uuid4": lambda: str(uuid.uuid4())})
         self.proxy_config = None
         self.support_chains = {}
+        self.request_responses = []
 
     def add(self, obj, name):
         """Add object to linked list"""
@@ -38,12 +54,20 @@ class RequestChain:
             self.node_list.append(self.tail)
             self.node_dict[name] = self.tail
 
-    def run(self):
+    def run(self, custom_vars: dict | None = None):
         """Run all requests"""
+        if custom_vars is not None and isinstance(custom_vars, dict):
+            self.global_vars.update(custom_vars)
+
         curr = self.head
         while curr is not None:
-            curr.obj.run(self.global_vars, self.proxy_config, self.support_chains)
+            request_response = curr.obj.run(
+                self.global_vars, self.proxy_config, self.support_chains
+            )
+            self.request_responses.append(request_response)
             curr = curr.next
+
+        return self.request_responses
 
     @staticmethod
     def parse_config(filename: str) -> object:
@@ -81,7 +105,15 @@ class RequestChain:
 
         req_chain = RequestChain()
         # Load global vars
-        req_chain.global_vars = global_vars
+        req_chain.global_vars.update(global_vars)
+        # Load Stored variable
+        try:
+            with open("global_vars.yaml", "r") as f:
+                stored_vars = yaml.safe_load(f)
+                req_chain.global_vars.update(stored_vars)
+        except FileNotFoundError:
+            pass
+
         req_chain.proxy_config = proxy_config
 
         for req in chain:

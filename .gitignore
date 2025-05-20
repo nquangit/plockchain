@@ -181,3 +181,5 @@ cython_debug/
 .cursorindexingignore
 
 real
+test.py
+global_vars.yaml

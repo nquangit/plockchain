@@ -1,0 +1,72 @@
+# This is an sample advanced config file.
+# It isn't related to the config file or request in current dir
+
+---
+global_vars:
+  key: value
+  secureCode: "xxxxxx"
+
+proxy:
+  host: 127.0.0.1
+  port: 8080
+
+chain:
+  - req:
+      name: init
+      use_tls: true
+      timeout: 5.0
+
+      event:
+        conditions:
+          status: 401
+          # body: "something"
+        triggers:
+          chains:
+            - auth_chain
+
+      import:
+        headers:
+          authorization: "Bearer {{jwt_token}}"
+        body:
+          ".transaction.refRequestId": "{{uuid4}}"
+
+      export:
+        response:
+          body:
+            vars:
+              - name: init_requestId
+                key: ".data.requestId"
+              - name: init_refCode
+                key: ".data.refCode"
+  - req:
+      name: user_verify
+      use_tls: true
+      timeout: 5.0
+      import:
+        headers:
+          authorization: "Bearer {{jwt_token}}"
+        body:
+          ".payload.payload.refCode": "{{init_refCode}}"
+          ".requestId": "{{init_requestId}}"
+          ".payload.payload.data.refRequestId": "{{init_requestId}}"
+
+      export:
+        response:
+          body:
+            vars:
+              - name: secureCode
+                key: ".data.data.secureCode"
+              - name: stepUpSignature
+                key: ".data.stepUpSignature.signature"
+
+# Support chain should end with _chain suffix
+auth_chain:
+  - req:
+      name: login
+      export:
+        response:
+          body:
+            vars:
+              - name: jwt_token
+                # Key access with jq for json response with unique key
+                key: ".data.jwt_token"
