@@ -153,7 +153,7 @@ class Request:
         connection: tuple,
         req: bytes,
         use_tls: bool = False,
-        timeout: float = 5.0,
+        timeout: float = 30.0,
         import_config: dict | None = None,
         export_config: dict | None = None,
         events: list | None = None,
@@ -279,6 +279,12 @@ class Request:
                             )
                             global_vars["skip_the_chain"] = True
                             return
+
+                        # Checking delay event
+                        delay_time = triggers.get("delay", 0)
+                        if delay_time > 0:
+                            global_vars["delay_time"] = delay_time
+
                     continue
 
                 if cond == "body":
@@ -288,6 +294,9 @@ class Request:
                             raise ValueError("Chain must be a list in triggers")
 
                         for chain in chains:
+                            if chain.endswith(".yaml"):
+                                pass
+                                # TODO: Implement load chain from other file.
                             chain_to_be_run = support_chains.get(chain, None)
                             if chain_to_be_run is None:
                                 raise ValueError(f"Chain {chain} not found")
@@ -391,7 +400,7 @@ class Request:
         import_config = req_conf.get("import", None)
 
         use_tls = req_conf.get("use_tls", True)
-        timeout = req_conf.get("timeout", 5.0)
+        timeout = req_conf.get("timeout", 30.0)
 
         host = req_conf.get("host")
         port = req_conf.get("port")
@@ -426,6 +435,7 @@ class Response:
     """
 
     def __init__(self, response: bytes):
+        
         self.raw_headers, self.raw_body = response.split(sep=b"\r\n\r\n", maxsplit=1)
         self.header = Header(self.raw_headers)
         self.body = Body(self.raw_body)
@@ -445,7 +455,7 @@ def send_http_request(
     host: str,
     port: int,
     raw_req: bytes,
-    timeout: float = 5.0,
+    timeout: float = 30.0,
     use_tls: bool = False,
     proxy: Optional[Dict[str, any]] = None,
 ) -> bytes:

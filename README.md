@@ -54,7 +54,7 @@ chain:
           host: auto
           # Auto mode will get the port base-on use_tls value (80 or 443)
           port: auto
-          # Timeout in seconds (default: 5.0)
+          # Timeout in seconds (default: 30.0)
           timeout: 5.0
 
           event:

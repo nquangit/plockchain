@@ -1,6 +1,9 @@
 import yaml
 from .request import Request
 import uuid
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class Node:
@@ -76,6 +79,12 @@ class RequestChain:
 
             if self.global_vars.get("skip_the_chain", False):
                 break
+
+            if self.global_vars.get("delay_time", 0) > 0:
+                import time
+
+                logger.warning(f"Delay {self.global_vars.get('delay_time')} seconds")
+                time.sleep(self.global_vars.get("delay_time"))
 
         self.global_vars.save()
 
