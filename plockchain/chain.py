@@ -2,6 +2,7 @@ import yaml
 from .request import Request
 import uuid
 import logging
+import jsonschema
 
 logger = logging.getLogger(__name__)
 
@@ -100,8 +101,29 @@ class RequestChain:
         if not path.exists():
             raise FileNotFoundError(f"File {filename} not found")
 
+        # Path đến file hiện tại
+        current_file = Path(__file__).resolve()
+        # Thư mục chứa file
+        current_dir = current_file.parent
+
+        with open(current_dir / "schema.yaml", "r") as f:
+            schema = yaml.safe_load(f)
+
         with path.open(mode="r") as f:
             data = yaml.safe_load(f)
+
+        try:
+            jsonschema.validate(instance=data, schema=schema)
+        except jsonschema.exceptions.ValidationError as e:
+            print(f"Validation ERROR in '{path.name}':")
+            print(e)
+            exit(-1)
+        except yaml.YAMLError as e:
+            print(f"Lỗi khi đọc file YAML (cấu hình hoặc schema): {e}")
+            exit(-1)
+        except Exception as e:
+            print(f"Đã xảy ra lỗi không mong muốn: {e}")
+            exit(-1)
 
         chain = data.get("chain")
         if not isinstance(chain, list):
