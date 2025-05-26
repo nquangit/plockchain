@@ -72,15 +72,15 @@ class Body:
         except UnicodeDecodeError:
             self.body = raw_body
 
-        self.content_type = content_type
-
-        if self.content_type is None:
-            self.content_type = self.__detect_content_type()
-        else:
-            self.content_type = self.content_type.split(sep=";")[0]
-            if self.content_type == self.OCTET_STREAM:
-                # Redetect
+        if raw_body.strip() != b"":
+            self.content_type = content_type
+            if self.content_type is None:
                 self.content_type = self.__detect_content_type()
+            else:
+                self.content_type = self.content_type.split(sep=";")[0]
+                if self.content_type == self.OCTET_STREAM:
+                    # Redetect
+                    self.content_type = self.__detect_content_type()
 
     def get(self, key):
         if self.content_type == self.X_WWW_FORM_URLENCODED:
@@ -181,8 +181,7 @@ class Request:
         first_line = self.raw_headers.split(sep=b"\r\n")[0]
         self.method, self.path, self.version = first_line.split(sep=b" ", maxsplit=2)
 
-        if self.method.lower() != b"get":
-            self.body = Body(self.raw_body, self.header.get("Content-Type"))
+        self.body = Body(self.raw_body, self.header.get("Content-Type"))
 
         self.events = events
 
@@ -196,6 +195,8 @@ class Request:
         return self.header.get(key)
 
     def __update_content_length(self):
+        if self.body is None:
+            return
         self.header.add("Content-Length", str(len(self.body.raw)))
 
     @property
@@ -435,7 +436,7 @@ class Response:
     """
 
     def __init__(self, response: bytes):
-        
+
         self.raw_headers, self.raw_body = response.split(sep=b"\r\n\r\n", maxsplit=1)
         self.header = Header(self.raw_headers)
         self.body = Body(self.raw_body)
