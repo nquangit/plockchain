@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "plockchain"
+version = "1.7"
+authors = [
+  { name="nquangit", email="nquang.it.04@gmail.com" },
+]
+description = "plockchain support for send request flow by write yaml config file"
+readme = "README.md"
+license-files = ["LICENSE"]
+keywords = ["nquangit", "plockchain"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "jq",
+    "pystache",
+    "PyYAML",
+    "jsonschema",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/nquangit/plockchain"
+
+[tool.setuptools.package-data]
+"plockchain" = ["*.yaml"]
+
+# Optional: If your package is in a 'src' directory, uncomment and adjust below
+# [tool.setuptools.packages.find]
+# where = ["src"]
+
+[tool.setuptools.packages.find]
+include = ["plockchain"]

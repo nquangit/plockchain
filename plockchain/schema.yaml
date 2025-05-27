@@ -18,7 +18,6 @@ properties:
             type: boolean
             description: Whether persistence is enabled.
         required:
-          - filename
           - enabled
     additionalProperties:
       oneOf:
