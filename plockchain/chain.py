@@ -166,7 +166,7 @@ class RequestChain:
         req_chain: RequestChain = RequestChain()
         # Load global vars
         req_chain.global_vars.update(global_vars)
-        req_chain.global_vars.load_config(data.get("__persistence__", {}))
+        req_chain.global_vars.load_config(global_vars.get("__persistence__", {}))
 
         # Load Stored variable
         try:
