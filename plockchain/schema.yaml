@@ -6,8 +6,25 @@ properties:
   global_vars:
     type: object
     description: Global variables used in the configuration.
+    properties:
+      __persistence__:
+        type: object
+        description: Persistence configuration for global variables.
+        properties:
+          filename:
+            type: string
+            description: The filename for persistence.
+          enabled:
+            type: boolean
+            description: Whether persistence is enabled.
+        required:
+          - filename
+          - enabled
     additionalProperties:
-      type: string
+      oneOf:
+        - type: string
+        - $ref: "#/properties/global_vars/properties/__persistence__" # Allow the __persistence__ object structure
+
   proxy:
     type: object
     description: Proxy configuration.

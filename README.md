@@ -38,49 +38,219 @@ Plockchain is driven by a YAML configuration file. Below is a sample configurati
 ```yaml
 # File: config.yaml
 ---
----
 global_vars:
-    key: value
+  key: value
+  username: admin
+  phoneNumber: password
+  billIds: "1234556"
+  secureCode: "zzzzzz="
 
 proxy:
-    host: 127.0.0.1
-    port: 8080
+  host: 127.0.0.1
+  port: 8080
 
 chain:
-    - req:
-          name: profile
-          use_tls: true
-          # Auto mode will get the host from the Host header
-          host: auto
-          # Auto mode will get the port base-on use_tls value (80 or 443)
-          port: auto
-          # Timeout in seconds (default: 30.0)
-          timeout: 5.0
+  - req:
+      name: init
+      use_tls: true
 
-          event:
-              conditions:
-                  status: 401
-              triggers:
-                  chain: auth_chain
+      events:
+        # Only response event
+        - conditions:
+            status: 401, 500
+            # body: "something"
+          triggers:
+            chains:
+              - auth_chain
 
-          import:
-              headers:
-                  Authorization: "Bearer {{token}}"
+      import:
+        headers:
+          authorization: "Bearer {{jwt_token}}"
+          "CSTC": "skip CSTC"
+        body:
+          ".transaction.refRequestId": "{{uuid4}}"
 
-# Support chain must end with _chain suffix
+      export:
+        response:
+          body:
+            vars:
+              - name: init_requestId
+                key: ".data.requestId"
+              - name: init_refCode
+                key: ".data.refCode"
+  - req:
+      name: user_verify
+      use_tls: true
+
+      events:
+        - conditions:
+            status: 401,500
+            # body: "something"
+          triggers:
+            skip: true
+
+      import:
+        headers:
+          authorization: "Bearer {{jwt_token}}"
+          "CSTC": "skip CSTC"
+        body:
+          ".payload.payload.refCode": "{{init_refCode}}"
+          ".requestId": "{{init_requestId}}"
+          ".payload.payload.data.refRequestId": "{{init_requestId}}"
+
+      export:
+        response:
+          body:
+            vars:
+              - name: secureCode
+                key: ".data.data.secureCode"
+              - name: stepUpSignature
+                key: ".data.stepUpSignature.signature"
+
+  - req:
+      name: inquiry-status
+      use_tls: true
+
+      events:
+        - conditions:
+            status: 401,500
+            # body: "something"
+          triggers:
+            skip: true
+
+        # - conditions:
+        #     status: 200
+        #   triggers:
+        #     # Delay time im second (float)
+        #     # delay: 1.
+        #     skip: true
+
+      import:
+        headers:
+          authorization: "Bearer {{jwt_token}}"
+          "CSTC": "skip CSTC"
+        body:
+          ".requestId": "{{init_requestId}}"
+
+  - req:
+      name: confirm-transaction
+      use_tls: true
+      timeout: 600.0
+
+      events:
+        - conditions:
+            status: 401,500
+            # body: "something"
+          triggers:
+            skip: true
+
+      import:
+        headers:
+          authorization: "Bearer {{jwt_token}}"
+          "CSTC": "skip CSTC"
+        body:
+          ".requestId": "{{init_requestId}}"
+          ".payload.refCode": "{{init_refCode}}"
+          ".payload.data.refRequestId": "{{init_requestId}}"
+          ".payload.stepupSignatures[].signature": "{{stepUpSignature}}"
+
+# Support chain should end with _chain suffix
 auth_chain:
-    - req:
-          name: login
-          host: api.taskspace.com.vn
-          port: 443
-          timeout: 5.0
-          export:
-              response:
-                  body:
-                      var:
-                          name: token
-                          # Key access with jq for json response with unique key
-                          key: ".data"
+  - req:
+      name: login
+      import:
+        headers:
+          "CSTC": "skip CSTC"
+        body:
+          ".username": "{{username}}"
+      export:
+        response:
+          body:
+            vars:
+              - name: jwt_token
+                # Key access with jq for json response with unique key
+                key: ".data.jwt_token"
+
+      events:
+        - conditions:
+            body: "change_device_token"
+          triggers:
+            chains:
+              - change_device_chain
+      # response_process:
+
+change_device_chain:
+  - req:
+      name: login
+      use_tls: true
+      import:
+        headers:
+          "CSTC": "skip CSTC"
+        body:
+          ".username": "{{username}}"
+      export:
+        response:
+          body:
+            vars:
+              - name: change_device_token
+                key: ".data.change_device_token"
+  - req:
+      name: change_device_init
+      use_tls: true
+      import:
+        headers:
+          "CSTC": "skip CSTC"
+          authorization: "Bearer {{change_device_token}}"
+      export:
+        response:
+          body:
+            vars:
+              - name: change_device_requestId
+                key: ".data.requestId"
+
+  - req:
+      name: change_device_get_otp
+      use_tls: true
+      import:
+        headers:
+          "CSTC": "skip CSTC"
+          authorization: "Bearer {{change_device_token}}"
+        body:
+          ".requestId": "{{change_device_requestId}}"
+          ".payload.destination": "{{phoneNumber}}"
+      export:
+        response:
+          body:
+            vars:
+              - name: change_device_otp
+                key: ".data.payload.code"
+
+  - req:
+      name: change_device_verify_otp
+      use_tls: true
+      import:
+        headers:
+          "CSTC": "skip CSTC"
+          authorization: "Bearer {{change_device_token}}"
+        body:
+          ".requestId": "{{change_device_requestId}}"
+          ".payload.code": "{{change_device_otp}}"
+      export:
+        response:
+          body:
+            vars:
+              - name: stepUpSignature
+                key: ".data.stepUpSignature.signature"
+
+  - req:
+      name: change_device_submit
+      use_tls: true
+      import:
+        headers:
+          "CSTC": "skip CSTC"
+          authorization: "Bearer {{change_device_token}}"
+        body:
+          ".stepUpSignatures[].signature": "{{stepUpSignature}}"
 ```
 
 ### Configuration Fields

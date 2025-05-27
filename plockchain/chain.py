@@ -19,15 +19,32 @@ class Node:
 class GlobalVariable(dict):
     """Class for store global variables"""
 
+    DEFAULT_FILENAME = "global_vars.yaml"
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.enabled = True
+        self.filename = self.DEFAULT_FILENAME
+
+    def load_config(self, config: dict):
+        if config is None or not isinstance(config, dict):
+            raise ValueError("Config must be dict")
+
+        self.enabled = config.get("enabled", True)
+        self.filename = config.get("filename", self.DEFAULT_FILENAME)
+
     def save(self):
         """Save global variables to file"""
         # Exclude object in global variable
+        if not self.enabled:
+            return
+
         string_variable = {}
         for key, value in self.items():
             if isinstance(value, str):
                 string_variable[key] = value
 
-        with open("global_vars.yaml", "w") as f:
+        with open(self.filename, "w") as f:
             yaml.dump(string_variable, f)
 
 
@@ -146,12 +163,14 @@ class RequestChain:
 
         base_dir = path.parent
 
-        req_chain = RequestChain()
+        req_chain: RequestChain = RequestChain()
         # Load global vars
         req_chain.global_vars.update(global_vars)
+        req_chain.global_vars.load_config(data.get("__persistence__", {}))
+
         # Load Stored variable
         try:
-            with open("global_vars.yaml", "r") as f:
+            with open(req_chain.global_vars.DEFAULT_FILENAME, "r") as f:
                 stored_vars = yaml.safe_load(f)
                 req_chain.global_vars.update(stored_vars)
         except FileNotFoundError:
