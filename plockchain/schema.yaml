@@ -63,6 +63,9 @@ definitions:
       use_tls:
         type: boolean
         description: Whether to use TLS for the request.
+      auto_update_content_length:
+        type: boolean
+        description: Whether to automatically update the Content-Length header.
       timeout:
         type: number
         description: Timeout for the request in seconds (float).

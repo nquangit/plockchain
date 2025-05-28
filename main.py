@@ -1,4 +1,5 @@
-from plockchain import RequestChain
+from plockchain import Parser
+
 
 # Request.parse_request("test/raw")
 
@@ -8,7 +9,7 @@ import yaml
 #     data = yaml.safe_load(f)
 
 
-chain: RequestChain = RequestChain.parse_config("test/conf.yaml")
+chain = Parser.parse_config("test/conf.yaml")
 
 chain.run(custom_vars={})
 

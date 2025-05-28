@@ -1,8 +1,8 @@
 import json
 import xml.etree.ElementTree as ET
-from pathlib import Path
 import jq
 import logging
+
 
 logger = logging.getLogger(__name__)
 
@@ -157,11 +157,13 @@ class Request:
         import_config: dict | None = None,
         export_config: dict | None = None,
         events: list | None = None,
+        auto_update_content_length: bool = True,
     ):
         self.importer_config = import_config
         self.exporter_config = export_config
         self.use_tls = use_tls
         self.timeout = timeout
+        self.auto_update_content_length = auto_update_content_length
 
         self.host, self.port = connection
 
@@ -201,8 +203,8 @@ class Request:
 
     @property
     def raw(self):
-        # TODO: add checking config for auto update content length
-        self.__update_content_length()
+        if self.auto_update_content_length:
+            self.__update_content_length()
         return (
             self.method
             + b" "
@@ -224,6 +226,7 @@ class Request:
             self.importer_config,
             self.exporter_config,
             self.events,
+            self.auto_update_content_length,
         )
 
     def run(self, global_vars, proxy_config: dict | None, support_chains: dict | None):
@@ -297,12 +300,25 @@ class Request:
                         for chain in chains:
                             if chain.endswith(".yaml"):
                                 pass
-                                # TODO: Implement load chain from other file.
+                                # TODO: Check and testing for load chain from other file.
+                                from .parser import Parser
+                                from .chain import RequestChain
+
+                                new_outside_chain: RequestChain = Parser.parse_config(
+                                    chain
+                                )
+                                new_outside_chain.run(
+                                    custom_support_chains=support_chains,
+                                    custom_vars=global_vars,
+                                )
                             chain_to_be_run = support_chains.get(chain, None)
                             if chain_to_be_run is None:
                                 raise ValueError(f"Chain {chain} not found")
                             # print(chain_to_be_run)
-                            chain_to_be_run.run(custom_support_chains=support_chains)
+                            chain_to_be_run.run(
+                                custom_support_chains=support_chains,
+                                custom_vars=global_vars,
+                            )
                         resend = True
                     continue
 
@@ -387,48 +403,6 @@ class Request:
                 except pystache.context.KeyNotFoundError as e:
                     logger.error(f"Key not found: {e} - skipping adding")
 
-    @staticmethod
-    def parse_request(base_dir: Path, req_conf: dict) -> object:
-        """Parse request from file"""
-        filename = base_dir / req_conf.get("name")
-        if filename is None:
-            raise ValueError("Filename is None")
-
-        with open(file=filename, mode="rb") as req:
-            data = req.read()
-
-        export_config = req_conf.get("export", None)
-        import_config = req_conf.get("import", None)
-
-        use_tls = req_conf.get("use_tls", True)
-        timeout = req_conf.get("timeout", 30.0)
-
-        host = req_conf.get("host")
-        port = req_conf.get("port")
-
-        if host is None or port is None:
-            host = "auto"
-            port = "auto"
-
-        events = req_conf.get("events", [])
-
-        if events is not None and not isinstance(events, list):
-            raise ValueError("Event must be a list")
-
-        for event in events:
-            if not isinstance(event, dict):
-                raise ValueError("Event must be a dict")
-            if (
-                event.get("conditions", None) is None
-                or event.get("triggers", None) is None
-            ):
-                raise ValueError("Event must have conditions and triggers")
-
-        req = Request(
-            (host, port), data, use_tls, timeout, import_config, export_config, events
-        )
-        return req
-
 
 class Response:
     """
@@ -436,15 +410,19 @@ class Response:
     """
 
     def __init__(self, response: bytes):
-
+        if len(response.strip()) == 0:
+            response = b"Failed\r\n\r\nFailed"
         self.raw_headers, self.raw_body = response.split(sep=b"\r\n\r\n", maxsplit=1)
         self.header = Header(self.raw_headers)
         self.body = Body(self.raw_body)
 
         first_line = self.raw_headers.split(sep=b"\r\n")[0]
-        self.version, self.status_code, self.reason = first_line.split(
-            sep=b" ", maxsplit=2
-        )
+        try:
+            self.version, self.status_code, self.reason = first_line.split(
+                sep=b" ", maxsplit=2
+            )
+        except ValueError:
+            self.version, self.status_code, self.reason = b"", b"", b""
 
 
 import socket
@@ -473,7 +451,11 @@ def send_http_request(
     if proxy:
         proxy_host = proxy["host"]
         proxy_port = proxy["port"]
-        sock.connect((proxy_host, proxy_port))
+        try:
+            sock.connect((proxy_host, proxy_port))
+        except ConnectionError as e:
+            print(f"Proxy connection failed: {e}")
+            return b""
 
         # 3. Nếu HTTPS: gửi CONNECT
         if use_tls:
