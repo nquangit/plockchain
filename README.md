@@ -53,7 +53,7 @@ chain:
   - req:
       name: init
       use_tls: true
-
+      auto_update_content_length: true
       events:
         # Only response event
         - conditions:

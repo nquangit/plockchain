@@ -299,7 +299,6 @@ class Request:
 
                         for chain in chains:
                             if chain.endswith(".yaml"):
-                                pass
                                 # TODO: Check and testing for load chain from other file.
                                 from .parser import Parser
                                 from .chain import RequestChain
@@ -311,6 +310,7 @@ class Request:
                                     custom_support_chains=support_chains,
                                     custom_vars=global_vars,
                                 )
+                                global_vars.update(new_outside_chain.global_vars)
                             chain_to_be_run = support_chains.get(chain, None)
                             if chain_to_be_run is None:
                                 raise ValueError(f"Chain {chain} not found")
