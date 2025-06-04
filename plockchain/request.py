@@ -231,6 +231,9 @@ class Request:
 
     def run(self, global_vars, proxy_config: dict | None, support_chains: dict | None):
         """Run request"""
+        from .parser import Parser
+        from .chain import RequestChain
+
         request_to_run = self.copy()
         request_to_run.importer(global_vars)
         # Start req handler
@@ -300,9 +303,6 @@ class Request:
                         for chain in chains:
                             if chain.endswith(".yaml"):
                                 # TODO: Check and testing for load chain from other file.
-                                from .parser import Parser
-                                from .chain import RequestChain
-
                                 new_outside_chain: RequestChain = Parser.parse_config(
                                     chain
                                 )
@@ -311,7 +311,9 @@ class Request:
                                     custom_vars=global_vars,
                                 )
                                 global_vars.update(new_outside_chain.global_vars)
-                            chain_to_be_run = support_chains.get(chain, None)
+                            chain_to_be_run: RequestChain = support_chains.get(
+                                chain, None
+                            )
                             if chain_to_be_run is None:
                                 raise ValueError(f"Chain {chain} not found")
                             # print(chain_to_be_run)
@@ -375,6 +377,15 @@ class Request:
                             raise ValueError("The key must be unique")
                         tmp = tmp[0]
                         global_vars[var_obj.get("name")] = tmp
+                        continue
+
+                    if pos == "header":
+                        tmp = self.response.header.get(var_obj.get("key"))
+                        if tmp is None:
+                            logger.warning(f"Key {var_obj.get('key')} not found")
+                            continue
+                        global_vars[var_obj.get("name")] = tmp
+                        continue
 
         global_vars.save()
 
