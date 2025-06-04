@@ -38,7 +38,13 @@ class Header:
         self.__update_headers_list()
 
     def remove(self, key: str):
-        del self.headers_dict[key]
+        try:
+            del self.headers_dict[key]
+        except KeyError:
+            try:
+                del self.headers_dict[key.lower()]
+            except KeyError:
+                return None
         self.__update_headers_list()
 
     def get(self, key: str):
@@ -161,12 +167,14 @@ class Request:
         export_config: dict | None = None,
         events: list | None = None,
         auto_update_content_length: bool = True,
+        auto_update_cookie: bool = True,
     ):
         self.importer_config = import_config
         self.exporter_config = export_config
         self.use_tls = use_tls
         self.timeout = timeout
         self.auto_update_content_length = auto_update_content_length
+        self.auto_update_cookie = auto_update_cookie
 
         self.host, self.port = connection
 
@@ -189,6 +197,23 @@ class Request:
         self.body = Body(self.raw_body, self.header.get("Content-Type"))
 
         self.events = events
+
+    @property
+    def cookie(self) -> dict:
+        raw_cookies = self.header.get("Cookie").split(sep=";")
+        cookies = {}
+        for raw_cookie in raw_cookies:
+            key, value = raw_cookie.split(sep="=", maxsplit=1)
+            cookies[key] = value
+        return cookies
+
+    def update_cookie(self, new_cookie: dict):
+        current_cookies = self.cookie
+        current_cookies.update(new_cookie)
+        raw_cookies = ""
+        for key, value in current_cookies.items():
+            raw_cookies += f"{key}={value}; "
+        self.header.add("Cookie", raw_cookies)
 
     def add_header(self, key: str, value: str):
         self.header.add(key, value)
@@ -230,15 +255,22 @@ class Request:
             self.exporter_config,
             self.events,
             self.auto_update_content_length,
+            self.auto_update_cookie,
         )
 
-    def run(self, global_vars, proxy_config: dict | None, support_chains: dict | None):
+    def run(
+        self,
+        global_vars,
+        proxy_config: dict | None,
+        support_chains: dict | None,
+        request_responses: list | None = None,
+    ):
         """Run request"""
         from .parser import Parser
         from .chain import RequestChain
 
-        request_to_run = self.copy()
-        request_to_run.importer(global_vars)
+        request_to_run: Request = self.copy()
+        request_to_run.importer(global_vars, request_responses)
         # Start req handler
 
         http_res = send_http_request(
@@ -274,9 +306,11 @@ class Request:
                                 if chain_to_be_run is None:
                                     raise ValueError(f"Chain {chain} not found")
                                 # print(chain_to_be_run)
-                                chain_to_be_run.run(
+                                req_res = chain_to_be_run.run(
                                     custom_support_chains=support_chains
                                 )
+                                request_responses.extend(req_res)
+
                             resend = True
                             # Skip the other checking
                             continue
@@ -400,8 +434,13 @@ class Request:
 
         global_vars.save()
 
-    def importer(self, global_vars):
+    def importer(self, global_vars, request_responses):
         import pystache
+
+        if self.auto_update_cookie:
+            last_request = request_responses[-1]
+            cookies = last_request.response.cookie
+            self.update_cookie(cookies)
 
         if self.importer_config is None:
             return

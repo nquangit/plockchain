@@ -89,7 +89,7 @@ class RequestChain:
         curr = self.head
         while curr is not None:
             request_response = curr.obj.run(
-                self.global_vars, self.proxy_config, self.support_chains
+                self.global_vars, self.proxy_config, self.support_chains, self.request_responses
             )
             self.request_responses.append(request_response)
             curr = curr.next

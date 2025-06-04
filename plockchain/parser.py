@@ -121,6 +121,7 @@ class Parser:
 
 		use_tls = req_conf.get("use_tls", True)
 		auto_update_content_length = req_conf.get("auto_update_content_length", True)
+		auto_update_cookie = req_conf.get("auto_update_cookie", True)
 		timeout = req_conf.get("timeout", 30.0)
 
 		host = req_conf.get("host")
@@ -145,6 +146,6 @@ class Parser:
 				raise ValueError("Event must have conditions and triggers")
 
 		req = Request(
-			(host, port), data, use_tls, timeout, import_config, export_config, events, auto_update_content_length
+			(host, port), data, use_tls, timeout, import_config, export_config, events, auto_update_content_length, auto_update_cookie
 		)
 		return req
