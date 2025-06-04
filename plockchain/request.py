@@ -322,7 +322,7 @@ class Request:
                                 f"Skip the chain in request {request_to_run.path} by event status code in {exp}"
                             )
                             global_vars["skip_the_chain"] = True
-                            return
+                            return request_to_run
 
                         # Checking delay event
                         delay_time = triggers.get("delay", 0)
@@ -365,10 +365,10 @@ class Request:
 
         if not resend:
             request_to_run.exporter(global_vars)
-            return
+            return request_to_run
 
         # Resend the request
-        request_to_run.importer(global_vars)
+        request_to_run.importer(global_vars, request_responses)
         http_res = send_http_request(
             self.host,
             self.port,
