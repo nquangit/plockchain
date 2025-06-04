@@ -444,6 +444,9 @@ class Request:
                 self.update_cookie(cookies)
             except IndexError:
                 pass
+            except AttributeError:
+                logger.error("Last request not found")
+                exit(-1)
 
         if self.importer_config is None:
             return
@@ -482,7 +485,7 @@ class Response:
 
         raw_cookies = self.header.get("Set-Cookie")
         if raw_cookies is None:
-            self.cookie = None
+            self.cookie = {}
         else:
             raw_cookies_list = raw_cookies.split(sep="||")
             self.cookie = {}
