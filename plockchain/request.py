@@ -107,7 +107,16 @@ class Body:
 
     def add(self, key, value):
         if self.content_type == self.X_WWW_FORM_URLENCODED:
-            return
+            body_params = self.body.split("&")
+            body_params_dict = {}
+            for param in body_params:
+                if param.strip() == "":
+                    continue
+                k, v = param.strip().split("=", maxsplit=1)
+                body_params_dict[k] = v
+            body_params_dict[key] = value
+            self.body = "&".join([f"{k}={v}" for k, v in body_params_dict.items()])
+
         elif self.content_type == self.JSON:
             try:
                 json_body = json.loads(self.body)
@@ -203,6 +212,8 @@ class Request:
         raw_cookies = self.header.get("Cookie").split(sep=";")
         cookies = {}
         for raw_cookie in raw_cookies:
+            if raw_cookie.strip() == "":
+                continue
             key, value = raw_cookie.split(sep="=", maxsplit=1)
             cookies[key] = value
         return cookies
