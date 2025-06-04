@@ -107,6 +107,26 @@ definitions:
                     items:
                       $ref: "#/definitions/variable"
                 additionalProperties: false
+              header:
+                type: object
+                description: Response headers to export.
+                properties:
+                  vars:
+                    type: array
+                    description: List of variables to export from the response headers.
+                    items:
+                      $ref: "#/definitions/variable"
+                additionalProperties: false
+              cookie:
+                type: object
+                description: Response cookies to export.
+                properties:
+                  vars:
+                    type: array
+                    description: List of variables to export from the response cookies.
+                    items:
+                      $ref: "#/definitions/variable"
+                additionalProperties: false
             additionalProperties: false
         additionalProperties: false
     required:

@@ -16,7 +16,10 @@ class Header:
         self.headers_dict = {}
         for header in raw_headers.split(sep=b"\r\n")[1:]:
             key, value = header.split(sep=b": ", maxsplit=1)
-            self.headers_dict[key.decode()] = value.decode()
+            if self.headers_dict.get(key.decode(), None) is not None:
+                self.headers_dict[key.decode()] += f"||{value.decode()}"
+            else:
+                self.headers_dict[key.decode()] = value.decode()
 
         self.headers_list = []
         self.__update_headers_list()
@@ -357,7 +360,7 @@ class Request:
                 raise ValueError("The request has not been run yet")
 
             for pos, val in value.items():
-                if pos not in ["body", "header"]:
+                if pos not in ["body", "header", "cookie"]:
                     continue
 
                 var_objs = val.get("vars")
@@ -383,6 +386,14 @@ class Request:
                         tmp = self.response.header.get(var_obj.get("key"))
                         if tmp is None:
                             logger.warning(f"Key {var_obj.get('key')} not found")
+                            continue
+                        global_vars[var_obj.get("name")] = tmp
+                        continue
+
+                    if pos == "cookie":
+                        tmp = self.response.cookie.get(var_obj.get("key"))
+                        if tmp is None:
+                            logger.warning("Response cookie not found")
                             continue
                         global_vars[var_obj.get("name")] = tmp
                         continue
@@ -426,6 +437,18 @@ class Response:
         self.raw_headers, self.raw_body = response.split(sep=b"\r\n\r\n", maxsplit=1)
         self.header = Header(self.raw_headers)
         self.body = Body(self.raw_body)
+
+        raw_cookies = self.header.get("Set-Cookie")
+        if raw_cookies is None:
+            self.cookie = None
+        else:
+            raw_cookies_list = raw_cookies.split(sep="||")
+            self.cookie = {}
+            for raw_cookie in raw_cookies_list:
+                key, value = raw_cookie.split(sep=";", maxsplit=1)[0].split(
+                    sep="=", maxsplit=1
+                )
+                self.cookie[key] = value
 
         first_line = self.raw_headers.split(sep=b"\r\n")[0]
         try:
