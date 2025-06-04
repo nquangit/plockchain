@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "plockchain"
-version = "1.8.3"
+version = "1.8.4"
 authors = [
   { name="nquangit", email="nquang.it.04@gmail.com" },
 ]

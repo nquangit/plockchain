@@ -3,12 +3,14 @@
 
 ---
 global_vars:
-  key: value
-  secureCode: "xxxxxx"
+  secureCode: "test="
+  __persistence__:
+    filename: global_vars.yaml
+    enabled: true
 
 proxy:
   host: 127.0.0.1
-  port: 8080
+  port: 8089
 
 chain:
   - req:
@@ -21,15 +23,11 @@ chain:
       events:
         # Only response event
         - conditions:
-            status: 401
+            status: 401, 500
             # body: "something"
           triggers:
             chains:
               - auth_chain
-        - conditions:
-            status: 500
-          triggers:
-            skip: true
 
       import:
         headers:
@@ -49,7 +47,6 @@ chain:
   - req:
       name: user_verify
       use_tls: true
-      timeout: 5.0
 
       events:
         - conditions:
@@ -79,7 +76,6 @@ chain:
   - req:
       name: inquiry-status
       use_tls: true
-      timeout: 5.0
 
       events:
         - conditions:
@@ -87,6 +83,13 @@ chain:
             # body: "something"
           triggers:
             skip: true
+
+        # - conditions:
+        #     status: 200
+        #   triggers:
+        #     # Delay time im second (float)
+        #     # delay: 1.
+        #     skip: true
 
       import:
         headers:
@@ -97,8 +100,8 @@ chain:
 
   - req:
       name: confirm-transaction
-      user_tls: true
-      timeout: 5.0
+      use_tls: true
+      timeout: 600.0
 
       events:
         - conditions:
@@ -124,6 +127,8 @@ auth_chain:
       import:
         headers:
           "CSTC": "skip CSTC"
+        body:
+          ".username": "{{username}}"
       export:
         response:
           body:
@@ -147,6 +152,8 @@ change_device_chain:
       import:
         headers:
           "CSTC": "skip CSTC"
+        body:
+          ".username": "{{username}}"
       export:
         response:
           body:
@@ -176,6 +183,7 @@ change_device_chain:
           authorization: "Bearer {{change_device_token}}"
         body:
           ".requestId": "{{change_device_requestId}}"
+          ".payload.destination": "{{phoneNumber}}"
       export:
         response:
           body:

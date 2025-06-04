@@ -438,9 +438,12 @@ class Request:
         import pystache
 
         if self.auto_update_cookie:
-            last_request = request_responses[-1]
-            cookies = last_request.response.cookie
-            self.update_cookie(cookies)
+            try:
+                last_request = request_responses[-1]
+                cookies = last_request.response.cookie
+                self.update_cookie(cookies)
+            except IndexError:
+                pass
 
         if self.importer_config is None:
             return
